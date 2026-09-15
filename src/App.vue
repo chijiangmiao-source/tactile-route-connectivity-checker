@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import BoardView from './components/BoardView.vue'
 import {
+  analyzeCutCells,
   applyTool,
+  colOf,
   countTiles,
   createEmptyState,
+  rowOf,
   verifyGrid,
+  type CutCellAnalysis,
+  type CutOverlay,
   type GridState,
   type Tool,
 } from './domain/grid'
@@ -29,7 +34,72 @@ const result = computed(() => verifyGrid(state.value))
 const tileTotal = computed(() => countTiles(state.value))
 const canUndo = computed(() => past.value.length > 0)
 
+// —— 单点中断分析：未分析(idle) / 已汇总(summary) / 已选中(selected) 三阶段 ——
+const analysisRequested = ref(false)
+const selectedCut = ref<number | null>(null)
+
+// 分析只在原核验通过时执行；棋盘任何变化都会使 computed 按当前棋盘重算
+const cutAnalysis = computed<CutCellAnalysis | null>(() => {
+  if (!analysisRequested.value || !result.value.ok) return null
+  return analyzeCutCells(state.value)
+})
+
+// 路线编辑、撤销、清空或载入示例都会替换 state：立即清除旧选择
+watch(state, () => {
+  selectedCut.value = null
+})
+
+type CutView =
+  | { phase: 'idle'; riskCells: number[] }
+  | { phase: 'summary'; riskCells: number[] }
+  | { phase: 'selected'; riskCells: number[]; selected: number; affected: number[] }
+
+const cutView = computed<CutView>(() => {
+  const analysis = cutAnalysis.value
+  if (analysis === null) return { phase: 'idle', riskCells: [] }
+  const selected = selectedCut.value
+  const at = selected === null ? -1 : analysis.riskCells.indexOf(selected)
+  if (selected === null || at === -1) {
+    return { phase: 'summary', riskCells: analysis.riskCells }
+  }
+  return {
+    phase: 'selected',
+    riskCells: analysis.riskCells,
+    selected,
+    affected: analysis.affectedCells[at],
+  }
+})
+
+// 传给棋盘的覆盖层：未分析时不产生任何标记
+const cutOverlay = computed<CutOverlay>(() => {
+  const view = cutView.value
+  if (view.phase === 'selected') {
+    return { riskCells: view.riskCells, affectedCells: view.affected, selected: view.selected }
+  }
+  return { riskCells: view.riskCells, affectedCells: [], selected: null }
+})
+
+function toggleCutAnalysis() {
+  analysisRequested.value = !analysisRequested.value
+  if (!analysisRequested.value) selectedCut.value = null
+}
+
+function selectCutCell(index: number) {
+  const view = cutView.value
+  // 再次点选同一风险格取消选中，否则切换到新选中的格
+  selectedCut.value = view.phase === 'selected' && view.selected === index ? null : index
+}
+
 function paint(payload: { index: number; viaDrag: boolean }) {
+  // 分析进行中点选橙色风险格：切换选中而非绘制（拖画不触发选中）
+  if (
+    !payload.viaDrag &&
+    cutView.value.phase !== 'idle' &&
+    cutView.value.riskCells.includes(payload.index)
+  ) {
+    selectCutCell(payload.index)
+    return
+  }
   // 端点工具只响应单击，不响应拖画，防止整排被拖成同一个端点
   if (payload.viaDrag && (currentTool.value === 'entrance' || currentTool.value === 'service')) return
   const next = applyTool(state.value, currentTool.value, payload.index)
@@ -89,7 +159,7 @@ function loadExample(kind: 'pass' | 'broken') {
       </div>
 
       <div class="board-wrap">
-        <BoardView :state="state" :result="result" @paint="paint" />
+        <BoardView :state="state" :result="result" :cut="cutOverlay" @paint="paint" />
       </div>
     </section>
 
@@ -111,6 +181,38 @@ function loadExample(kind: 'pass' | 'broken') {
           }}
         </div>
       </div>
+
+      <section class="cut-panel" aria-label="单点中断分析">
+        <button
+          type="button"
+          class="tool-btn cut-toggle"
+          :class="{ active: analysisRequested }"
+          data-testid="btn-cut-analysis"
+          :aria-pressed="analysisRequested"
+          @click="toggleCutAnalysis"
+        >⚠ 单点中断分析</button>
+
+        <p v-if="!analysisRequested" class="cut-note" data-testid="cut-hint">
+          核验通过后可启动分析：找出被临时封闭后会切断入口与服务点的单块非端点触觉砖。
+        </p>
+        <p v-else-if="!result.ok" class="cut-note warn" data-testid="cut-blocked">
+          原核验未通过：请先修复上述核验问题，恢复通过后分析结果会按当前棋盘自动重算。
+        </p>
+        <template v-else>
+          <p class="cut-note" data-testid="cut-summary">
+            <template v-if="cutView.riskCells.length > 0">
+              共 {{ cutView.riskCells.length }} 格风险格（橙色标记）：封闭任一格即切断入口与服务点，点选橙色格预览受影响范围。
+            </template>
+            <template v-else>
+              无风险格：封闭任意单块非端点触觉砖，入口与服务点依然保持连通。
+            </template>
+          </p>
+          <p v-if="cutView.phase === 'selected'" class="cut-note detail" data-testid="cut-detail">
+            封闭第 {{ rowOf(cutView.selected) + 1 }} 行第 {{ colOf(cutView.selected) + 1 }} 列后，
+            服务点一侧 {{ cutView.affected.length }} 格不可达（含服务点）；再次点选该格可取消。
+          </p>
+        </template>
+      </section>
 
       <div class="stats">
         <div class="stat">
@@ -156,6 +258,11 @@ function loadExample(kind: 'pass' | 'broken') {
           所有触觉砖都必须属于入口所在连通分量，现场遗留的孤立铺设会被标红。
         </p>
         <p><strong>操作：</strong>选择工具后单击格位，砖/障碍/空白支持按住拖画。</p>
+        <p>
+          <strong>单点中断分析：</strong>核验通过后启动，橙色环标记风险格；
+          点选橙色格预览服务点一侧影响区（半透明橙），再次点选取消；
+          分析进行中如需编辑橙色格本身，请先关闭分析。
+        </p>
       </div>
     </aside>
   </div>

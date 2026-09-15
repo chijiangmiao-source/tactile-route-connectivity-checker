@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { COLS, ROWS, colOf, rowOf, type GridState, type VerificationResult } from '../domain/grid'
+import {
+  COLS,
+  ROWS,
+  colOf,
+  rowOf,
+  type CutOverlay,
+  type GridState,
+  type VerificationResult,
+} from '../domain/grid'
 
 const props = defineProps<{
   state: GridState
   result: VerificationResult
+  cut: CutOverlay
 }>()
 
 const emit = defineEmits<{
@@ -110,6 +119,9 @@ const viewBox = '0 0 ' + WIDTH + ' ' + HEIGHT
         :data-kind="state.cells[i]"
         :data-issue="result.issueCells.includes(i) ? '1' : '0'"
         :data-path="result.pathCells.includes(i) ? '1' : '0'"
+        :data-cut="cut.riskCells.includes(i) ? '1' : '0'"
+        :data-affected="cut.affectedCells.includes(i) ? '1' : '0'"
+        :data-cut-selected="cut.selected === i ? '1' : '0'"
         :data-entrance="state.entrance === i ? '1' : '0'"
         :data-service="state.service === i ? '1' : '0'"
         :aria-label="label(i)"
@@ -149,6 +161,43 @@ const viewBox = '0 0 ' + WIDTH + ' ' + HEIGHT
           stroke-width="2"
           pointer-events="none"
         />
+
+        <!-- 影响区：选中风险格后服务点一侧不可达区域（半透明橙） -->
+        <rect
+          v-if="cut.affectedCells.includes(i)"
+          :x="x(i) + 4"
+          :y="y(i) + 4"
+          :width="CELL - 8"
+          :height="CELL - 8"
+          rx="8"
+          fill="rgba(249, 115, 22, 0.32)"
+          stroke="#fb923c"
+          stroke-width="1.5"
+          stroke-dasharray="5 4"
+          pointer-events="none"
+        />
+
+        <!-- 风险格：橙色标记（封闭该格即切断入口与服务点） -->
+        <g v-if="cut.riskCells.includes(i)" pointer-events="none">
+          <rect
+            :x="x(i) + 4.5"
+            :y="y(i) + 4.5"
+            :width="CELL - 9"
+            :height="CELL - 9"
+            rx="7"
+            :fill="cut.selected === i ? 'rgba(249, 115, 22, 0.30)' : 'rgba(249, 115, 22, 0.08)'"
+            stroke="#f97316"
+            :stroke-width="cut.selected === i ? 4 : 2.5"
+            class="cut-ring"
+          />
+          <path
+            :d="`M ${x(i) + 9} ${y(i) + 5} L ${x(i) + 16} ${y(i) + 17} L ${x(i) + 2} ${y(i) + 17} Z`"
+            fill="#ea580c"
+            stroke="#fff7ed"
+            stroke-width="1"
+            stroke-linejoin="round"
+          />
+        </g>
 
         <!-- 问题格：红色标记（孤岛 / 断路对侧 / 问题端点） -->
         <g v-if="result.issueCells.includes(i)" pointer-events="none">

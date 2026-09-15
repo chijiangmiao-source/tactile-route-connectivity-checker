@@ -160,6 +160,74 @@ export function countTiles(state: GridState): number {
 }
 
 /**
+ * 单点中断分析结果（割点分析）。
+ * 风险格与每格对应的受影响区域均按格索引升序，结果完全确定。
+ */
+export interface CutCellAnalysis {
+  /** 风险格：被临时封闭后令入口与服务点失联的非端点触觉砖，按格索引升序 */
+  riskCells: number[]
+  /**
+   * 与 riskCells 一一对应：封闭该风险格后，服务点一侧不可达的触觉砖
+   * （按格索引升序，不含被封闭格本身；服务点必然包含在内）。
+   */
+  affectedCells: number[][]
+}
+
+/** 棋盘上的单点中断分析覆盖层（应用层按当前阶段组装后传给 BoardView） */
+export interface CutOverlay {
+  /** 橙色风险标记格 */
+  riskCells: number[]
+  /** 选中风险格后的半透明影响区 */
+  affectedCells: number[]
+  /** 当前选中的风险格，未选中为 null */
+  selected: number | null
+}
+
+/**
+ * 确定性的单点中断（割点）分析。
+ * 在现有四邻接触觉砖图上逐格试移除每块非端点触觉砖：若移除后入口
+ * 无法到达服务点，则该格为风险格；其受影响区域为移除后入口分量之外
+ * 的全部触觉砖（即服务点一侧被切断的区域）。
+ *
+ * 仅在原核验通过（两端点连通）时才有意义：端点缺失、不落在触觉砖上、
+ * 重合或不连通时返回空结果。候选格按格索引升序试移除，洪水遍历与
+ * 邻居次序固定，因此结果顺序按格索引确定。
+ */
+export function analyzeCutCells(state: GridState): CutCellAnalysis {
+  const riskCells: number[] = []
+  const affectedCells: number[][] = []
+  const { cells, entrance, service } = state
+  if (
+    entrance === null ||
+    service === null ||
+    entrance === service ||
+    cells[entrance] !== 'tile' ||
+    cells[service] !== 'tile'
+  ) {
+    return { riskCells, affectedCells }
+  }
+  // 原核验未通过（两端点本就不连通）时不产生任何风险格
+  if (findComponent(entrance, cells)[service] === 0) {
+    return { riskCells, affectedCells }
+  }
+
+  for (let cut = 0; cut < CELL_COUNT; cut += 1) {
+    if (cells[cut] !== 'tile' || cut === entrance || cut === service) continue
+    const trial = cells.slice()
+    trial[cut] = 'empty'
+    const reach = findComponent(entrance, trial)
+    if (reach[service] === 1) continue
+    riskCells.push(cut)
+    const lost: number[] = []
+    for (let i = 0; i < CELL_COUNT; i += 1) {
+      if (i !== cut && cells[i] === 'tile' && reach[i] === 0) lost.push(i)
+    }
+    affectedCells.push(lost)
+  }
+  return { riskCells, affectedCells }
+}
+
+/**
  * 核验规则（任一不满足即不通过，并给出涉事格用于标红）：
  * 1. 入口、服务点均已设置；
  * 2. 两个端点都落在触觉砖上；

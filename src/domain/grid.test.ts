@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   COLS,
   ROWS,
+  analyzeCutCells,
   applyTool,
   colOf,
   countTiles,
@@ -325,5 +326,113 @@ describe('编辑与统计', () => {
     expect(next.entrance).toBe(7)
     expect(next.cells[7]).toBe('empty')
     expect(verifyGrid(next).issue?.code).toBe('service-missing')
+  })
+})
+
+describe('单点中断分析（割点）', () => {
+  it('直线通道：全部内部格均为风险格，影响区为服务点一侧后缀', () => {
+    const rows = blanks(ROWS)
+    rows[2] = 'E##########S'
+    const state = build(rows)
+    expect(verifyGrid(state).ok).toBe(true)
+
+    const analysis = analyzeCutCells(state)
+    const expectedRisk = Array.from({ length: COLS - 2 }, (_, k) => 2 * COLS + 1 + k)
+    expect(analysis.riskCells).toEqual(expectedRisk)
+    expect(analysis.affectedCells).toHaveLength(COLS - 2)
+
+    // 封闭第 5 列（索引 28）：服务点一侧 29..35 共 7 格不可达
+    const at = analysis.riskCells.indexOf(2 * COLS + 4)
+    expect(analysis.affectedCells[at]).toEqual([29, 30, 31, 32, 33, 34, 35])
+    // 封闭紧邻服务点的格：仅服务点自身受影响
+    const last = analysis.riskCells.indexOf(2 * COLS + 10)
+    expect(analysis.affectedCells[last]).toEqual([2 * COLS + 11])
+
+    // 影响区不含被封闭格本身、按格索引升序，且服务点始终受影响
+    for (let k = 0; k < analysis.riskCells.length; k += 1) {
+      const affected = analysis.affectedCells[k]
+      expect(affected).not.toContain(analysis.riskCells[k])
+      expect([...affected].sort((a, b) => a - b)).toEqual(affected)
+      expect(affected).toContain(2 * COLS + 11)
+    }
+  })
+
+  it('环形路线：封闭任意单格都不会切断两端点，无风险格', () => {
+    const rows = blanks(ROWS)
+    rows[1] = '..#####.....'
+    rows[2] = '..E...S.....'
+    rows[3] = '..#####.....'
+    const state = build(rows)
+    expect(verifyGrid(state).ok).toBe(true)
+
+    const analysis = analyzeCutCells(state)
+    expect(analysis.riskCells).toEqual([])
+    expect(analysis.affectedCells).toEqual([])
+  })
+
+  it('带支路：只报告真正切断两端点的格，支路砖不是风险格', () => {
+    const rows = blanks(ROWS)
+    rows[0] = '.....#......'
+    rows[1] = '.....#......'
+    rows[2] = 'E##########S'
+    const state = build(rows)
+    expect(verifyGrid(state).ok).toBe(true)
+
+    const analysis = analyzeCutCells(state)
+    // 风险格恰为主通道内部 10 格；支路格 (0,5)=5、(1,5)=17 不在其中
+    expect(analysis.riskCells).toEqual(Array.from({ length: COLS - 2 }, (_, k) => 2 * COLS + 1 + k))
+
+    // 封闭支路交汇格 (2,5)=29：支路随服务点一侧一并失联
+    const junction = analysis.riskCells.indexOf(2 * COLS + 5)
+    expect(analysis.affectedCells[junction]).toEqual([
+      0 * COLS + 5,
+      1 * COLS + 5,
+      2 * COLS + 6,
+      2 * COLS + 7,
+      2 * COLS + 8,
+      2 * COLS + 9,
+      2 * COLS + 10,
+      2 * COLS + 11,
+    ])
+
+    // 封闭 (2,8)=32：支路仍在入口一侧，不受影响
+    const downstream = analysis.riskCells.indexOf(2 * COLS + 8)
+    expect(analysis.affectedCells[downstream]).toEqual([2 * COLS + 9, 2 * COLS + 10, 2 * COLS + 11])
+  })
+
+  it('端点永不作为风险格：两格直连时没有可封闭的候选', () => {
+    const rows = blanks(ROWS)
+    rows[4] = 'ES..........'
+    const state = build(rows)
+    expect(verifyGrid(state).ok).toBe(true)
+    expect(analyzeCutCells(state).riskCells).toEqual([])
+  })
+
+  it('三格通道：唯一中间格是风险格，影响区恰为服务点', () => {
+    const rows = blanks(ROWS)
+    rows[4] = 'E#S.........'
+    const state = build(rows)
+    const analysis = analyzeCutCells(state)
+    expect(analysis.riskCells).toEqual([4 * COLS + 1])
+    expect(analysis.affectedCells[0]).toEqual([4 * COLS + 2])
+  })
+
+  it('核验未通过时返回空分析（断路、缺端点、空棋盘）', () => {
+    const rows = blanks(ROWS)
+    rows[2] = 'E#####.####S'
+    const broken = build(rows)
+    expect(verifyGrid(broken).ok).toBe(false)
+    expect(analyzeCutCells(broken)).toEqual({ riskCells: [], affectedCells: [] })
+
+    expect(analyzeCutCells(createEmptyState())).toEqual({ riskCells: [], affectedCells: [] })
+  })
+
+  it('结果确定：重复计算完全一致', () => {
+    const rows = blanks(ROWS)
+    rows[0] = '.....#......'
+    rows[1] = '.....#......'
+    rows[2] = 'E##########S'
+    const state = build(rows)
+    expect(analyzeCutCells(state)).toEqual(analyzeCutCells(state))
   })
 })
