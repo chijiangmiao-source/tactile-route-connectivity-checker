@@ -1,0 +1,33 @@
+# 触觉引导砖核验板 —— 容器编排
+#
+# 启动 Web（宿主端口可用 WEB_PORT 覆盖，默认 8080）：
+#   WEB_PORT=9090 docker compose up --build
+#
+# 一次性验收（单元测试 + Playwright E2E，结束即退出）：
+#   docker compose build verify
+#   docker compose run --rm verify
+# 或：
+#   docker compose run --rm verify npm run verify
+services:
+  web:
+    build:
+      context: .
+    image: tactile-verifier:latest
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    ports:
+      # WEB_PORT 覆盖宿主端口；容器内 Vite 固定监听 5173
+      - "${WEB_PORT:-8080}:5173"
+    restart: unless-stopped
+
+  verify:
+    image: tactile-verifier:latest
+    build:
+      context: .
+    # 一次性验收：类型检查 → Vitest 连通/孤岛/并列路径判据 → Playwright E2E
+    # Playwright 自带 webServer，会在容器内自行拉起 Vite，不依赖 web 服务
+    command: ["npm", "run", "verify"]
+    environment:
+      CI: "1"
+    profiles:
+      # 不随 `docker compose up` 启动，仅在显式 run 时执行
+      - verify

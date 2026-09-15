@@ -1,0 +1,29 @@
+{
+  "name": "tactile-tiles-verifier",
+  "version": "1.0.0",
+  "private": true,
+  "description": "车站触觉引导砖四邻接连通核验板（纯前端，Vue 3 + SVG）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "verify": "vitest run && playwright test"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1",
+    "@types/node": "^20.19.43",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0",
+    "vitest": "^3.0.7",
+    "vue-tsc": "^2.2.10"
+  }
+}

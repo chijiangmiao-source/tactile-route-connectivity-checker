@@ -1,0 +1,260 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #273449;
+  --line: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --tile: #f5c542;
+  --tile-dark: #b98a12;
+  --empty: #f8fafc;
+  --empty-line: #cbd5e1;
+  --obstacle: #475569;
+  --path: #2563eb;
+  --path-soft: rgba(37, 99, 235, 0.35);
+  --ok: #22c55e;
+  --bad: #ef4444;
+  --entrance: #16a34a;
+  --service: #7c3aed;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 70% -10%, #1e293b 0%, #0f172a 60%);
+  color: var(--text);
+  font-family:
+    'PingFang SC',
+    'Microsoft YaHei',
+    'Noto Sans CJK SC',
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+#app {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+}
+
+.app-header h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+
+.app-header p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 940px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s,
+    transform 0.05s;
+}
+
+.tool-btn:hover {
+  border-color: #64748b;
+}
+
+.tool-btn:active {
+  transform: translateY(1px);
+}
+
+.tool-btn.active {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25) inset;
+  background: #1d3557;
+}
+
+.tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  display: inline-block;
+}
+.swatch.empty {
+  background: var(--empty);
+}
+.swatch.tile {
+  background: var(--tile);
+  background-image: radial-gradient(var(--tile-dark) 1.4px, transparent 1.6px);
+  background-size: 6px 6px;
+}
+.swatch.obstacle {
+  background: repeating-linear-gradient(45deg, var(--obstacle) 0 3px, #334155 3px 6px);
+}
+.swatch.entrance {
+  background: var(--entrance);
+}
+.swatch.service {
+  background: var(--service);
+}
+
+.board-wrap {
+  overflow-x: auto;
+}
+
+.board-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.board-svg .cell {
+  cursor: pointer;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.verdict {
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.verdict.ok {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.verdict.bad {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+.verdict .verdict-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.verdict.ok .verdict-title {
+  color: var(--ok);
+}
+
+.verdict.bad .verdict-title {
+  color: var(--bad);
+}
+
+.verdict .reason {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stat {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.stat .label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stat .value {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat.full {
+  grid-column: 1 / -1;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions .tool-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.legend {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.legend strong {
+  color: var(--text);
+}
